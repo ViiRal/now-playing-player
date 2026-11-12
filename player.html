@@ -13,7 +13,10 @@ function onYouTubeIframeAPIReady() {
     playerVars: { autoplay: 0, mute: 1, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, rel: 0, playsinline: 1 },
     events: {
       onReady() { ready = true; player.mute(); up({ type: 'ready' }); if (queued) { handle(queued); queued = null; } },
-      onStateChange(e) { up({ type: 'state', state: e.data, t: player.getCurrentTime() }); },
+      onStateChange(e) {
+        if (e.data === 1) { try { player.unloadModule('captions'); player.unloadModule('cc'); } catch (x) {} } // no subtitles on a wallpaper
+        up({ type: 'state', state: e.data, t: player.getCurrentTime() });
+      },
       onError(e) { up({ type: 'error', code: e.data }); }
     }
   });
