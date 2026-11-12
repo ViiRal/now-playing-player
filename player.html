@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>player</title>
+<style>html,body,#p{margin:0;width:100%;height:100%;background:#000;overflow:hidden}</style></head>
+<body><div id="p"></div>
+<script>
+// Muted YouTube player, driven by postMessage from the wallpaper page that embeds this file.
+let player, ready = false, queued = null;
+const up = m => parent.postMessage(m, '*');
+const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s);
+function onYouTubeIframeAPIReady() {
+  player = new YT.Player('p', {
+    width: '100%', height: '100%',
+    playerVars: { autoplay: 0, mute: 1, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, rel: 0, playsinline: 1 },
+    events: {
+      onReady() { ready = true; player.mute(); up({ type: 'ready' }); if (queued) { handle(queued); queued = null; } },
+      onStateChange(e) { up({ type: 'state', state: e.data, t: player.getCurrentTime() }); },
+      onError(e) { up({ type: 'error', code: e.data }); }
+    }
+  });
+}
+function handle(m) {
+  if (!ready) { if (m.type === 'load') queued = m; return; }
+  if (m.type === 'load') {
+    player.mute();
+    const arg = { videoId: m.videoId, startSeconds: Math.max(0, m.start || 0) };
+    m.play ? player.loadVideoById(arg) : player.cueVideoById(arg);
+  }
+  else if (m.type === 'play') player.playVideo();
+  else if (m.type === 'pause') player.pauseVideo();
+  else if (m.type === 'seek') player.seekTo(m.t, true);
+  else if (m.type === 'stop') player.stopVideo();
+}
+addEventListener('message', e => { if (e.source === parent) handle(e.data || {}); });
+setInterval(() => { if (ready && player.getPlayerState && player.getPlayerState() === 1) up({ type: 'time', t: player.getCurrentTime() }); }, 1000);
+</script></body></html>
