@@ -8,8 +8,12 @@ let player, ready = false, queued = null;
 const up = m => parent.postMessage(m, '*');
 up({ type: 'boot' });
 addEventListener('error', e => up({ type: 'jserror', code: String(e.message || (e.target && e.target.src) || 'load error').slice(0, 120) }), true);
-const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s);
+const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api';
+s.onload = () => up({ type: 'diag', code: 'api script loaded' }); s.onerror = () => up({ type: 'diag', code: 'api script FAILED to load' });
+document.head.appendChild(s);
+setTimeout(() => { const f = document.querySelector('iframe'); up({ type: 'diag', code: 'after 8s: YT=' + typeof YT + ' Player=' + (typeof YT !== 'undefined' && typeof YT.Player) + ' ready=' + ready + ' iframe=' + (f ? f.src.slice(0, 90) : 'none') + ' referrer=' + document.referrer + ' ancestor=' + (location.ancestorOrigins ? [...location.ancestorOrigins].join(',') : '?') }); }, 8000);
 function onYouTubeIframeAPIReady() {
+  up({ type: 'diag', code: 'api ready' });
   player = new YT.Player('p', {
     width: '100%', height: '100%',
     playerVars: { autoplay: 0, mute: 1, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, rel: 0, playsinline: 1 },
