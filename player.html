@@ -29,6 +29,7 @@ function create(m) {
         if (e.data === 1) { try { player.unloadModule('captions'); player.unloadModule('cc'); } catch (x) {} }   // no subtitles on a wallpaper
         up({ type: 'state', state: e.data, t: has('getCurrentTime') ? player.getCurrentTime() : 0, muted: has('isMuted') ? player.isMuted() : null });
       },
+      onPlaybackQualityChange(e) { up({ type: 'quality', code: e.data + ' of [' + (has('getAvailableQualityLevels') ? player.getAvailableQualityLevels().join(',') : '') + '] box=' + innerWidth + 'x' + innerHeight + ' dpr=' + devicePixelRatio }); },
       onError(e) { up({ type: 'error', code: e.data }); }
     }
   });
