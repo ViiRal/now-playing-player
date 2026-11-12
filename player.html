@@ -1,44 +1,46 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><title>player</title>
-<style>html,body,#p{margin:0;width:100%;height:100%;background:#000;overflow:hidden}</style></head>
-<body><div id="p"></div>
+<style>html,body,#wrap,#p{margin:0;width:100%;height:100%;background:#000;overflow:hidden}</style></head>
+<body><div id="wrap"></div>
 <script>
 // Muted YouTube player, driven by postMessage from the wallpaper page that embeds this file.
-let player, ready = false, queued = null;
+// A fresh player is built for every video, with the video id, mute and autoplay set at creation:
+// browsers only allow autoplay when the video starts muted, and loading a video into an existing player did not reliably start.
+let player = null, apiReady = false, queued = null, want = true;
 const up = m => parent.postMessage(m, '*');
-up({ type: 'boot' });
 addEventListener('error', e => up({ type: 'jserror', code: String(e.message || (e.target && e.target.src) || 'load error').slice(0, 120) }), true);
 const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api';
-s.onload = () => up({ type: 'diag', code: 'api script loaded' }); s.onerror = () => up({ type: 'diag', code: 'api script FAILED to load' });
+s.onerror = () => up({ type: 'jserror', code: 'YouTube player script failed to load' });
 document.head.appendChild(s);
-setTimeout(() => { const f = document.querySelector('iframe'); up({ type: 'diag', code: 'after 8s: YT=' + typeof YT + ' Player=' + (typeof YT !== 'undefined' && typeof YT.Player) + ' ready=' + ready + ' iframe=' + (f ? f.src.slice(0, 90) : 'none') + ' referrer=' + document.referrer + ' ancestor=' + (location.ancestorOrigins ? [...location.ancestorOrigins].join(',') : '?') }); }, 8000);
-function onYouTubeIframeAPIReady() {
-  up({ type: 'diag', code: 'api ready' });
+function onYouTubeIframeAPIReady() { apiReady = true; up({ type: 'ready' }); if (queued) { handle(queued); queued = null; } }
+const has = fn => player && typeof player[fn] === 'function';
+function destroy() { if (player) { try { player.destroy(); } catch (e) {} player = null; } }
+function create(m) {
+  destroy();
+  document.getElementById('wrap').innerHTML = '<div id="p"></div>';
+  want = m.play !== false;
   player = new YT.Player('p', {
-    width: '100%', height: '100%',
-    playerVars: { autoplay: 0, mute: 1, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, rel: 0, playsinline: 1 },
+    width: '100%', height: '100%', videoId: m.videoId,
+    playerVars: { autoplay: want ? 1 : 0, mute: 1, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, rel: 0, playsinline: 1,
+                  cc_load_policy: 0, start: Math.floor(Math.max(0, m.start || 0)) },
     events: {
-      onReady() { ready = true; player.mute(); up({ type: 'ready' }); if (queued) { handle(queued); queued = null; } },
+      onReady(e) { e.target.mute(); if (want) e.target.playVideo(); },
       onStateChange(e) {
-        if (e.data === 1) { try { player.unloadModule('captions'); player.unloadModule('cc'); } catch (x) {} } // no subtitles on a wallpaper
-        up({ type: 'state', state: e.data, t: player.getCurrentTime() });
+        if (e.data === 1) { try { player.unloadModule('captions'); player.unloadModule('cc'); } catch (x) {} }   // no subtitles on a wallpaper
+        up({ type: 'state', state: e.data, t: has('getCurrentTime') ? player.getCurrentTime() : 0, muted: has('isMuted') ? player.isMuted() : null });
       },
       onError(e) { up({ type: 'error', code: e.data }); }
     }
   });
 }
 function handle(m) {
-  if (!ready) { if (m.type === 'load') queued = m; return; }
-  if (m.type === 'load') {
-    player.mute();
-    const arg = { videoId: m.videoId, startSeconds: Math.max(0, m.start || 0) };
-    m.play ? player.loadVideoById(arg) : player.cueVideoById(arg);
-  }
-  else if (m.type === 'play') player.playVideo();
-  else if (m.type === 'pause') player.pauseVideo();
-  else if (m.type === 'seek') player.seekTo(m.t, true);
-  else if (m.type === 'stop') player.stopVideo();
+  if (!apiReady) { if (m.type === 'load') queued = m; return; }
+  if (m.type === 'load') return create(m);
+  if (m.type === 'stop') return destroy();
+  if (m.type === 'play') { want = true; if (has('playVideo')) { player.mute(); player.playVideo(); } }
+  else if (m.type === 'pause') { want = false; if (has('pauseVideo')) player.pauseVideo(); }
+  else if (m.type === 'seek') { if (has('seekTo')) player.seekTo(m.t, true); }
 }
 addEventListener('message', e => { if (e.source === parent) handle(e.data || {}); });
-setInterval(() => { if (ready && player.getPlayerState && player.getPlayerState() === 1) up({ type: 'time', t: player.getCurrentTime() }); }, 1000);
+setInterval(() => { if (has('getPlayerState') && player.getPlayerState() === 1) up({ type: 'time', t: player.getCurrentTime() }); }, 1000);
 </script></body></html>
